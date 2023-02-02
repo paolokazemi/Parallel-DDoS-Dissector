@@ -33,6 +33,8 @@ class Attack:
         LOGGER.debug('Filtering attack data on target IP address.')
         target_addresses = [x for t in target for x in self.data.destination_address if x in t]
         self.data = self.data[self.data.destination_address.isin(target_addresses)]
+        time_start: datetime = pytz.utc.localize(self.data.time_start.min())
+        self.data['time_offset'] = self.data.time_end.apply(lambda x: (pytz.utc.localize(x) - time_start).seconds)
 
 
 @total_ordering
@@ -58,9 +60,16 @@ class AttackVector:
         self.bytes = self.data.nr_bytes.sum()
         self.time_start: datetime = pytz.utc.localize(self.data.time_start.min())
         self.time_end: datetime = pytz.utc.localize(self.data.time_end.max())
-        self.duration = (self.time_end - self.time_start).seconds
+        self.duration = (self.time_end - self.time_start).round(freq='s').seconds
         self.source_ips: list[IPAddress] = data.source_address.unique()
         self.fraction_of_attack = 0
+        self.avg_bps = (self.bytes << 3) // self.duration if self.duration > 0 else 0
+        self.avg_pps = self.packets // self.duration if self.duration > 0 else 0
+        self.avg_Bpp = self.bytes // self.packets
+        self.grouped = self.data.groupby('time_offset').sum()
+        self.peak_bps = self.grouped.nr_bytes.max() << 3
+        self.peak_pps = self.grouped.nr_packets.max()
+        self.peak_Bpp = (self.grouped.nr_bytes // self.grouped.nr_packets).max()
         try:
             if self.protocol == 'UDP' and source_port != -1:
                 self.service = (AMPLIFICATION_SERVICES.get(self.source_port, None) or
@@ -152,6 +161,12 @@ class AttackVector:
             f'nr_{"flows" if self.filetype == FileType.FLOW else "packets"}': len(self),
             'nr_packets': int(self.packets),
             'nr_megabytes': int(self.bytes) // 1_000_000,
+            'avg_bps': int(self.avg_bps),
+            'avg_pps': int(self.avg_pps),
+            'avg_Bpp': int(self.avg_Bpp),
+            'peak_bps': int(self.peak_bps),
+            'peak_pps': int(self.peak_pps),
+            'peak_Bpp': int(self.peak_Bpp),
             'time_start': self.time_start.isoformat(),
             'duration_seconds': self.duration,
             'source_ips': f'{len(self.source_ips)} IP addresses ommitted' if summarized
@@ -218,6 +233,8 @@ class Fingerprint:
             tags.append(vector.protocol)
             if vector.service is None:
                 tags.append(f'{vector.protocol} flood attack')
+            if len(vector.source_ips) > 1 and vector.service is not None and vector.service != "Fragmented IP packets":
+                tags.append(f'{vector.service} amplification attack')
             if vector.protocol == 'TCP':
                 if len(vector.tcp_flags) == 1:
                     flags = list(vector.tcp_flags)[0]

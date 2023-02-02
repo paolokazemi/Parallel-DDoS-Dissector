@@ -205,9 +205,11 @@ def compute_summary(attack_vectors: list[AttackVector]) -> dict[str, Any]:
     data = pd.concat([v.data for v in attack_vectors])
     time_start: datetime = pytz.utc.localize(data.time_start.min())
     time_end: datetime = pytz.utc.localize(data.time_end.max())
-    duration = (time_end - time_start).seconds
+    duration = (time_end - time_start).round(freq='s').seconds
     nr_bytes = int(data.nr_bytes.sum())
     nr_packets = int(data.nr_packets.sum())
+    data['time_offset'] = data.time_end.apply(lambda x: (pytz.utc.localize(x) - time_start).seconds)
+    grouped = data.groupby('time_offset').sum()
     return {
         'time_start': time_start.isoformat(),
         'time_end': time_end.isoformat(),
@@ -218,5 +220,8 @@ def compute_summary(attack_vectors: list[AttackVector]) -> dict[str, Any]:
         'total_ips': len(data.source_address.unique()),
         'avg_bps': (nr_bytes << 3) // duration if duration > 0 else 0,  # octets to bits
         'avg_pps': nr_packets // duration if duration > 0 else 0,
-        'avg_Bpp': nr_bytes // nr_packets
+        'avg_Bpp': nr_bytes // nr_packets,
+        'peak_bps': int(grouped.nr_bytes.max() << 3),
+        'peak_pps': int(grouped.nr_packets.max()),
+        'peak_Bpp': int((grouped.nr_bytes // grouped.nr_packets).max()),
     }
