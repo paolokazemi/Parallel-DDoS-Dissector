@@ -208,8 +208,8 @@ def compute_summary(attack_vectors: list[AttackVector]) -> dict[str, Any]:
     duration = (time_end - time_start).round(freq='s').seconds
     nr_bytes = int(data.nr_bytes.sum())
     nr_packets = int(data.nr_packets.sum())
-    data['time_offset'] = data.time_end.apply(lambda x: (pytz.utc.localize(x) - time_start).seconds)
-    grouped = data.groupby('time_offset').sum()
+    data['unix_timestamp'] = data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
+    grouped = data.groupby('unix_timestamp').sum()
     return {
         'time_start': time_start.isoformat(),
         'time_end': time_end.isoformat(),

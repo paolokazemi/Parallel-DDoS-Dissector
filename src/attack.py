@@ -33,8 +33,7 @@ class Attack:
         LOGGER.debug('Filtering attack data on target IP address.')
         target_addresses = [x for t in target for x in self.data.destination_address if x in t]
         self.data = self.data[self.data.destination_address.isin(target_addresses)]
-        time_start: datetime = pytz.utc.localize(self.data.time_start.min())
-        self.data['time_offset'] = self.data.time_end.apply(lambda x: (pytz.utc.localize(x) - time_start).seconds)
+        self.data['unix_timestamp'] = self.data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
 
 
 @total_ordering
@@ -66,7 +65,7 @@ class AttackVector:
         self.avg_bps = (self.bytes << 3) // self.duration if self.duration > 0 else 0
         self.avg_pps = self.packets // self.duration if self.duration > 0 else 0
         self.avg_Bpp = self.bytes // self.packets
-        self.grouped = self.data.groupby('time_offset').sum()
+        self.grouped = self.data.groupby('unix_timestamp').sum()
         self.peak_bps = self.grouped.nr_bytes.max() << 3
         self.peak_pps = self.grouped.nr_packets.max()
         self.peak_Bpp = (self.grouped.nr_bytes // self.grouped.nr_packets).max()
