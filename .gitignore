@@ -14,6 +14,8 @@ src/output
 src/settings.py
 venv/
 fingerprints/
+out/
+intermediate_fingeprints/
 *.log
 *.conf
 *.ini
