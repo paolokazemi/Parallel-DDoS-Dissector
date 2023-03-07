@@ -15,7 +15,7 @@ from util import AMPLIFICATION_SERVICES, TCP_FLAG_NAMES, TCP_BIT_NUMBERS, get_ou
 from logger import LOGGER
 from misp import MispInstance
 
-__all__ = ['Attack', 'AttackVector', 'Fingerprint']
+__all__ = ['Attack', 'AttackVector', 'NormalTraffic', 'Fingerprint']
 
 
 class Attack:
@@ -32,8 +32,57 @@ class Attack:
         """
         LOGGER.debug('Filtering attack data on target IP address.')
         target_addresses = [x for t in target for x in self.data.destination_address if x in t]
+        normal_traffic = NormalTraffic(self.data[~self.data.destination_address.isin(target_addresses)], self.filetype)
         self.data = self.data[self.data.destination_address.isin(target_addresses)]
         self.data['unix_timestamp'] = self.data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
+        return normal_traffic
+
+
+class NormalTraffic:
+    def __init__(self, data: pd.DataFrame, filetype: FileType):
+        self.data = data
+        self.filetype = filetype
+        if len(self.data) > 0:
+            self.source_port = dict(get_outliers(self.data,
+                                                'source_port',
+                                                0.1,
+                                                use_zscore=False,
+                                                return_others=True)) or 'random'
+            self.destination_ports = dict(get_outliers(self.data,
+                                                    'destination_port',
+                                                    0.1,
+                                                    use_zscore=False,
+                                                    return_others=True)) or 'random'
+            self.protocol = dict(get_outliers(self.data,
+                                            'protocol',
+                                            0.1,
+                                            use_zscore=False,
+                                            return_others=True)) or 'random'
+        else:
+            self.source_port = None
+            self.destination_ports = None
+            self.protocol = None
+
+    def as_dict(self, attack_duration: int) -> dict:
+        nr_bytes = int(self.data.nr_bytes.sum())
+        nr_packets = int(self.data.nr_packets.sum())
+        self.data['unix_timestamp'] = self.data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
+        grouped_by_timestamp = self.data.groupby('unix_timestamp').sum()
+        return {
+            'attack_duration': attack_duration,
+            f'total_{"flows" if self.filetype == FileType.FLOW else "packets"}': len(self.data),
+            'total_megabytes': nr_bytes // 1_000_000,
+            'total_packets': nr_packets,
+            'avg_bps': (nr_bytes << 3) // attack_duration if attack_duration > 0 else 0,  # octets to bits
+            'avg_pps': nr_packets // attack_duration if attack_duration > 0 else 0,
+            'avg_Bpp': nr_bytes // nr_packets if nr_packets > 0 else 0,
+            'peak_bps': int(grouped_by_timestamp.nr_bytes.max()) << 3 if nr_bytes > 0 else 0,
+            'peak_pps': int(grouped_by_timestamp.nr_packets.max()) if nr_packets > 0 else 0,
+            'peak_Bpp': int((grouped_by_timestamp.nr_bytes // grouped_by_timestamp.nr_packets).max()) if nr_packets > 0 else 0,
+            'source_port': self.source_port,
+            'destination_ports': self.destination_ports,
+            'protocol': self.protocol,
+        }
 
 
 @total_ordering
@@ -65,10 +114,10 @@ class AttackVector:
         self.avg_bps = (self.bytes << 3) // self.duration if self.duration > 0 else 0
         self.avg_pps = self.packets // self.duration if self.duration > 0 else 0
         self.avg_Bpp = self.bytes // self.packets
-        self.grouped = self.data.groupby('unix_timestamp').sum()
-        self.peak_bps = self.grouped.nr_bytes.max() << 3
-        self.peak_pps = self.grouped.nr_packets.max()
-        self.peak_Bpp = (self.grouped.nr_bytes // self.grouped.nr_packets).max()
+        self.grouped_by_timestamp = self.data.groupby('unix_timestamp').sum()
+        self.peak_bps = self.grouped_by_timestamp.nr_bytes.max() << 3
+        self.peak_pps = self.grouped_by_timestamp.nr_packets.max()
+        self.peak_Bpp = (self.grouped_by_timestamp.nr_bytes // self.grouped_by_timestamp.nr_packets).max()
         try:
             if self.protocol == 'UDP' and source_port != -1:
                 self.service = (AMPLIFICATION_SERVICES.get(self.source_port, None) or

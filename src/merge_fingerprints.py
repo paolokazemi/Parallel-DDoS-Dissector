@@ -5,13 +5,14 @@ from collections import defaultdict
 from dateutil import parser
 from functools import reduce
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
 import hashlib
 import json
 import os
 
-def read_fingerprint(file_path: Path):
+
+def read_fingerprint(file_path: Path) -> Dict[str, Any]:
     """
     Read a fingerprint from a Path and parses the json to a dict.
     :param file_path: Path to fingerprint file.
@@ -21,9 +22,9 @@ def read_fingerprint(file_path: Path):
         return json.load(f)
 
 
-def write_fingerprint(file_path: Path, file_contents):
+def write_fingerprint(file_path: Path, file_contents: Dict[str, Any] | list[Dict[str, Any]]):
     """
-    Write a fingerprint to a specific file location.
+    Write a fingerprint or a list of fingerprints to a specific file location.
     :param file_path: Path to the fingerprint file.
     :param file_contents: Object containing the fingerprint details.
     """
@@ -68,7 +69,7 @@ def weighted_dict(left_dict: Dict[str, float], left_weight: int, right_dict: Dic
     return out_dict
 
 
-def merge_dict_if_present(merged_vector, x, y, key, default_value):
+def merge_dict_if_present(merged_vector: Dict[str, Any], x: Dict[str, Any], y: Dict[str, Any], key: str, default_value: Any):
     """
     Merge dictionary values that represented the distribution of different parameters in the attack.
     :param merged_vector: Output attack vector.
@@ -85,15 +86,17 @@ def merge_dict_if_present(merged_vector, x, y, key, default_value):
             y[key],
             y["nr_packets"]
         )
-    elif key in x and type(x[key]) == dict:
+    elif (key in x and x[key] == "random") or (key in y and y[key] == "random"):
+        merged_vector[key] = "random"
+    elif key in x:
         merged_vector[key] = x[key]
-    elif key in y and type(y[key]) == dict:
+    elif key in y:
         merged_vector[key] = y[key]
     else:
         merged_vector[key] = default_value
 
 
-def merge_attack_vectors(x, y):
+def merge_attack_vectors(x: Dict[str, Any], y: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge two attack vectors together, similarly to `merge_fingerprints` this function is used as the reduction operator.
     """
@@ -115,6 +118,9 @@ def merge_attack_vectors(x, y):
         "source_ips": list(set(x["source_ips"]).union(set(y["source_ips"]))),
     }
 
+    if "nr_flows" in x and "nr_flows" in y:
+        merged_vector["nr_flows"] = x["nr_flows"] + y["nr_flows"]
+
     merge_dict_if_present(merged_vector, x, y, "destination_ports", "random")
     merge_dict_if_present(merged_vector, x, y, "tcp_flags", None)
     merge_dict_if_present(merged_vector, x, y, "ethernet_type", None)
@@ -132,7 +138,32 @@ def merge_attack_vectors(x, y):
     return merged_vector
 
 
-def merge_fingerprints(x, y):
+def merge_normal_traffic(x: Dict[str, Any], y: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge normal traffic statistics using the same procedure applied to fingerprints.
+    """
+    merged_traffic = {
+        "total_packets": x["total_packets"] + y["total_packets"],
+        "total_megabytes": x["total_megabytes"] + y["total_megabytes"],
+        "avg_bps": int(weighted_avg(x["avg_bps"], x["attack_duration"], y["avg_bps"], y["attack_duration"])),
+        "avg_pps": int(weighted_avg(x["avg_pps"], x["attack_duration"], y["avg_pps"], y["attack_duration"])),
+        "avg_Bpp": int(weighted_avg(x["avg_Bpp"], x["total_packets"], y["avg_Bpp"], y["total_packets"])),
+        "peak_bps": max(x["peak_bps"], y["peak_bps"]),
+        "peak_pps": max(x["peak_pps"], y["peak_pps"]),
+        "peak_Bpp": max(x["peak_Bpp"], y["peak_Bpp"]),
+    }
+
+    if "total_flows" in x and "total_flows" in y:
+        merged_traffic["total_flows"] = x["total_flows"] + y["total_flows"]
+
+    merge_dict_if_present(merged_traffic, x, y, "source_port", "random")
+    merge_dict_if_present(merged_traffic, x, y, "destination_ports", "random")
+    merge_dict_if_present(merged_traffic, x, y, "protocol", "random")
+
+    return merged_traffic
+
+
+def merge_fingerprints(x: Dict[str, Any], y: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge two fingerprints together, depending on the parameter a different operation is applied.
     For example:
@@ -160,6 +191,13 @@ def merge_fingerprints(x, y):
         "peak_Bpp": max(x["peak_Bpp"], y["peak_Bpp"]),
     }
 
+    if "total_flows" in x and "total_flows" in y:
+        merged_attack["total_flows"] = x["total_flows"] + y["total_flows"]
+
+    if "normal_traffic" in x and "normal_traffic" in y:
+        merged_attack["normal_traffic"] = merge_normal_traffic(x["normal_traffic"], y["normal_traffic"])
+        merged_attack["normal_traffic"]["attack_duration"] = merged_attack["duration_seconds"]
+
     vectorsMap = defaultdict(list)
     for attack_vector in x["attack_vectors"] + y["attack_vectors"]:
         # Attack vectors are considered to be merged together if they have the same service, protocol, and source port.
@@ -176,7 +214,7 @@ def merge_fingerprints(x, y):
     return merged_attack
 
 
-def anonymize_ips(attack_vector):
+def anonymize_ips(attack_vector: Dict[str, Any]) -> Dict[str, Any]:
     """
     Anonymize the IP addresses contained in the attack vector using CAIDA routeviews dataset.
     :param attack_vector: Original attack vector.

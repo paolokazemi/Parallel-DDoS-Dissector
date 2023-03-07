@@ -7,7 +7,7 @@ from datetime import datetime
 import pytz
 
 from logger import LOGGER
-from attack import Attack, AttackVector
+from attack import Attack, AttackVector, NormalTraffic
 from util import get_outliers, FileType
 
 __all__ = ["infer_target", "extract_attack_vectors", "compute_summary"]
@@ -195,7 +195,7 @@ def extract_attack_vectors(attack: Attack) -> list[AttackVector]:
     return sorted(attack_vectors)
 
 
-def compute_summary(attack_vectors: list[AttackVector]) -> dict[str, Any]:
+def compute_summary(attack_vectors: list[AttackVector], normal_traffic: NormalTraffic) -> dict[str, Any]:
     """
     Compute the summary statistics of the attack given its attack vectors
     :param attack_vectors: List of attack vectors that make up the attack
@@ -209,7 +209,7 @@ def compute_summary(attack_vectors: list[AttackVector]) -> dict[str, Any]:
     nr_bytes = int(data.nr_bytes.sum())
     nr_packets = int(data.nr_packets.sum())
     data['unix_timestamp'] = data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
-    grouped = data.groupby('unix_timestamp').sum()
+    grouped_by_timestamp = data.groupby('unix_timestamp').sum()
     return {
         'time_start': time_start.isoformat(),
         'time_end': time_end.isoformat(),
@@ -220,8 +220,9 @@ def compute_summary(attack_vectors: list[AttackVector]) -> dict[str, Any]:
         'total_ips': len(data.source_address.unique()),
         'avg_bps': (nr_bytes << 3) // duration if duration > 0 else 0,  # octets to bits
         'avg_pps': nr_packets // duration if duration > 0 else 0,
-        'avg_Bpp': nr_bytes // nr_packets,
-        'peak_bps': int(grouped.nr_bytes.max() << 3),
-        'peak_pps': int(grouped.nr_packets.max()),
-        'peak_Bpp': int((grouped.nr_bytes // grouped.nr_packets).max()),
+        'avg_Bpp': nr_bytes // nr_packets if nr_packets > 0 else 0,
+        'peak_bps': int(grouped_by_timestamp.nr_bytes.max()) << 3,
+        'peak_pps': int(grouped_by_timestamp.nr_packets.max()),
+        'peak_Bpp': int((grouped_by_timestamp.nr_bytes // grouped_by_timestamp.nr_packets).max()),
+        'normal_traffic': normal_traffic.as_dict(duration),
     }
