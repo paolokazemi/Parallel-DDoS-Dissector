@@ -80,9 +80,9 @@ def split_and_run(args: Namespace, pcap: Path):
     logging.debug("Running DDoS Dissector")
     for pcap_file in after_split_pcaps(pcap):
         if args.docker:
-            exec(f"docker run --rm -i -v {pcap.resolve().parent}:/data {args.docker_image} -f /data/{pcap_file.name}", sudo=True)
+            exec(f"docker run --rm -i -v {pcap.resolve().parent}:/data {args.docker_image} -f /data/{pcap_file.name} --no-interactive", sudo=True)
         else:
-            exec(f"python3 src/main.py -f {pcap_file}")
+            exec(f"python3 src/main.py -f {pcap_file} --no-interactive")
 
         logging.debug(f"Running rm -rf {pcap_file}")
         os.remove(pcap_file)

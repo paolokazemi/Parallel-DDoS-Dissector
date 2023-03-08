@@ -13,7 +13,7 @@ from util import get_outliers, FileType
 __all__ = ["infer_target", "extract_attack_vectors", "compute_summary"]
 
 
-def infer_target(attack: Attack) -> IPNetwork:
+def infer_target(attack: Attack, interactive: bool) -> IPNetwork:
     """
     Infer the target IP address(es) of this attack.
     If the target is a subnet, this method will homogenize the IP adresses in the attack to the first address in the
@@ -30,22 +30,23 @@ def infer_target(attack: Attack) -> IPNetwork:
         return IPNetwork(targets[0])
 
     LOGGER.info('No clear target IP address could be inferred.')
-    # Ask the user if the most common destination address (most packets received) is the target
-    packets_per_ip = attack.data.groupby('destination_address').nr_packets.sum().sort_values(ascending=False)
-    most_traffic_address, nr_packets = list(packets_per_ip.items())[0]
-    use_most_common = input(f'The most common destination address is {most_traffic_address} '
-                            f'({round(nr_packets / packets_per_ip.sum() * 100, 1)}% of captured packets), '
-                            f'is this the target? y/n: ')
-    if use_most_common.lower().strip() in ['y', 'yes']:
-        return IPNetwork(most_traffic_address)
+    if interactive:
+        # Ask the user if the most common destination address (most packets received) is the target
+        packets_per_ip = attack.data.groupby('destination_address').nr_packets.sum().sort_values(ascending=False)
+        most_traffic_address, nr_packets = list(packets_per_ip.items())[0]
+        use_most_common = input(f'The most common destination address is {most_traffic_address} '
+                                f'({round(nr_packets / packets_per_ip.sum() * 100, 1)}% of captured packets), '
+                                f'is this the target? y/n: ')
+        if use_most_common.lower().strip() in ['y', 'yes']:
+            return IPNetwork(most_traffic_address)
 
-    LOGGER.info('You can pass a target IP address with the --target flag. '
-                'Alternatively, Dissector can look for a target subnet (IPv4/24 or IPv6/64) in case of a carpet '
-                'bombing attack.')
-    keep_going = input('Continue looking for a target subnet? y/n: ')
-    if keep_going.lower().strip() not in ['y', 'yes']:
-        LOGGER.info('Aborting.')
-        sys.exit()
+        LOGGER.info('You can pass a target IP address with the --target flag. '
+                    'Alternatively, Dissector can look for a target subnet (IPv4/24 or IPv6/64) in case of a carpet '
+                    'bombing attack.')
+        keep_going = input('Continue looking for a target subnet? y/n: ')
+        if keep_going.lower().strip() not in ['y', 'yes']:
+            LOGGER.info('Aborting.')
+            sys.exit()
 
     # Check for the most targeted IP addresses the fraction of destination IPs that is in their /24 or /64 subnet
     best_network, fraction_ips_in_network = None, 0
@@ -58,7 +59,7 @@ def infer_target(attack: Attack) -> IPNetwork:
     if fraction_ips_in_network > 0.7:
         LOGGER.debug(f'Found an IP subnet that comprises a large fraction of the flows\' destination IPs '
                      f'({round(fraction_ips_in_network, 2)}).')
-    else:
+    elif interactive:
         LOGGER.critical('Could not infer a clear target IP address from the data. You can explicitly identify the '
                         'target with the --target flag.')
         use_target = input(f'The most prominent destination IP network is {best_network}, with '

@@ -4,7 +4,7 @@ from typing import List
 
 import pandas as pd
 from pathlib import Path
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, BooleanOptionalAction
 from netaddr import IPNetwork
 
 from logger import LOGGER
@@ -38,6 +38,8 @@ def parse_arguments() -> Namespace:
     parser.add_argument('--debug', action='store_true', help='Optional: show debug messages')
     parser.add_argument('--show-target', action='store_true', help='Optional: Do NOT anonymize the target IP address '
                                                                    '/ network in the fingerprint')
+    parser.add_argument('--interactive', action=BooleanOptionalAction, default=True,
+                        help='Optional: If some information is missing, ask via the prompt interactively.')
     return parser.parse_args()
 
 

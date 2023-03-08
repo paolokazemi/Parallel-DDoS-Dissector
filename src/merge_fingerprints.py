@@ -267,6 +267,7 @@ def read_and_merge(filename: str, data_folder: Path):
         for file in files
         if file.endswith('.json')
     ]
+    write_fingerprint(Path(f"intermediate_fingeprints/{filename}.json"), fingerprint_files)
 
     # Apply a reduce operation to merge the fingerprints together
     reduced_attack = reduce(merge_fingerprints, fingerprint_files)
@@ -274,7 +275,6 @@ def read_and_merge(filename: str, data_folder: Path):
     reduced_attack["key"] = hashlib.md5((str(reduced_attack)).encode()).hexdigest()
 
     write_fingerprint(Path(f"out/{filename}.json"), reduced_attack)
-    write_fingerprint(Path(f"intermediate_fingeprints/{filename}.json"), fingerprint_files)
 
 
 if __name__ == '__main__':
