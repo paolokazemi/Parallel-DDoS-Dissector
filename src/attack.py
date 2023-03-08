@@ -110,10 +110,22 @@ class AttackVector:
         self.time_end: datetime = pytz.utc.localize(self.data.time_end.max())
         self.duration = (self.time_end - self.time_start).round(freq='s').seconds
         self.source_ips: list[IPAddress] = data.source_address.unique()
+        self.source_statistics = [
+            {
+                'ip': str(ip),
+                'nr_packets': int(nr_packets),
+                'nr_bytes': int(nr_bytes),
+                'avg_bps': (int(nr_bytes) << 3) // self.duration if self.duration > 0 else 0,
+                'avg_pps': int(nr_packets) // self.duration if self.duration > 0 else 0,
+            }
+            for ip, nr_bytes, nr_packets in data.groupby('source_address', as_index=False) \
+                                                .sum()[['source_address', 'nr_bytes', 'nr_packets']] \
+                                                .values.tolist()
+        ]
         self.fraction_of_attack = 0
         self.avg_bps = (self.bytes << 3) // self.duration if self.duration > 0 else 0
         self.avg_pps = self.packets // self.duration if self.duration > 0 else 0
-        self.avg_Bpp = self.bytes // self.packets
+        self.avg_Bpp = self.bytes // self.packets if self.packets > 0 else 0
         self.grouped_by_timestamp = self.data.groupby('unix_timestamp').sum()
         self.peak_bps = self.grouped_by_timestamp.nr_bytes.max() << 3
         self.peak_pps = self.grouped_by_timestamp.nr_packets.max()
@@ -219,6 +231,7 @@ class AttackVector:
             'duration_seconds': self.duration,
             'source_ips': f'{len(self.source_ips)} IP addresses ommitted' if summarized
             else [str(i) for i in self.source_ips],
+            'source_statistics': self.source_statistics,
         }
         if self.filetype == FileType.PCAP:
             fields.update({'ethernet_type': self.eth_type,
