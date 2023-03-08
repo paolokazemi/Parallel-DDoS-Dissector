@@ -99,7 +99,8 @@ def merge_dict_if_present(merged_vector: Dict[str, Any], x: Dict[str, Any], y: D
 def merge_source_statistics(x: list[Dict], y: list[Dict], attack_duration: int) -> list[Dict]:
     grouped_by_ip = defaultdict(list)
     for source in x + y:
-        grouped_by_ip[source["ip"]].append(source)
+        ip = source["ip"]
+        grouped_by_ip[ip if type(ip) == str else frozenset(ip)].append(source)
 
     def merge_stats(_x: Dict, _y: Dict) -> Dict:
         return {
