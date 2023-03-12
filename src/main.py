@@ -53,7 +53,7 @@ if __name__ == '__main__':
     # Read the file(s) into a dataframe
     data: pd.DataFrame = pd.concat([read_file(f, filetype=filetype, nr_processes=args.n) for f in args.files])
     attack = Attack(data, filetype)  # Construct an Attack object with the DDoS data
-    target: List[IPNetwork] = args.targets or [infer_target(attack)]  # Infer attack target if not passed as argument
+    target: List[IPNetwork] = args.targets or [infer_target(attack, args.interactive)]  # Infer attack target if not passed as argument
     normal_traffic = attack.filter_data_on_target(target=target)  # Keep only the traffic sent to the target
     attack_vectors = extract_attack_vectors(attack)  # Extract the attack vectors from the attack
     if len(attack_vectors) == 0:

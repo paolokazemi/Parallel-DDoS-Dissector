@@ -96,15 +96,15 @@ def merge_dict_if_present(merged_vector: Dict[str, Any], x: Dict[str, Any], y: D
         merged_vector[key] = default_value
 
 
-def merge_source_statistics(x: list[Dict], y: list[Dict], attack_duration: int) -> list[Dict]:
+def merge_source_statistics(x: list[Dict], y: list[Dict], attack_duration: int, by_key: str = "ip") -> list[Dict]:
     grouped_by_ip = defaultdict(list)
     for source in x + y:
-        ip = source["ip"]
+        ip = source[by_key]
         grouped_by_ip[ip if type(ip) == str else frozenset(ip)].append(source)
 
     def merge_stats(_x: Dict, _y: Dict) -> Dict:
         return {
-            "ip": _x["ip"],
+            f"{by_key}": _x[by_key],
             "nr_packets": _x["nr_packets"] + _y["nr_packets"],
             "nr_bytes": _x["nr_bytes"] + _y["nr_bytes"],
         }
@@ -114,6 +114,9 @@ def merge_source_statistics(x: list[Dict], y: list[Dict], attack_duration: int) 
         merged_stats = reduce(merge_stats, source_stats)
         merged_stats["avg_bps"] = (merged_stats["nr_bytes"] << 3) // attack_duration if attack_duration > 0 else 0
         merged_stats["avg_pps"] = merged_stats["nr_packets"] // attack_duration if attack_duration > 0 else 0
+        if by_key == "as":
+            merged_stats["total_ips"] = len(source_stats)
+            merged_stats.pop("ip", None)
         source_statistics.append(merged_stats)
 
     return source_statistics
@@ -246,11 +249,12 @@ def anonymize_ips(attack_vector: Dict[str, Any]) -> Dict[str, Any]:
     """
     time_start = parser.parse(attack_vector["time_start"])
     prefix_to_as = PrefixToAS(time_start.year, time_start.month, time_start.day).download()
-    attack_vector["source_ips"] = [prefix_to_as.lookup(ip) for ip in attack_vector["source_ips"]]
-    attack_vector["source_statistics"] = merge_source_statistics(
-        [{**source, "ip": prefix_to_as.lookup(source["ip"])} for source in attack_vector["source_statistics"]],
+    attack_vector["source_ases"] = [prefix_to_as.lookup(ip) for ip in attack_vector["source_ips"]]
+    attack_vector["ases_statistics"] = merge_source_statistics(
+        [{**source, "as": prefix_to_as.lookup(source["ip"])} for source in attack_vector["source_statistics"]],
         [],
-        attack_vector["duration_seconds"]
+        attack_vector["duration_seconds"],
+        by_key="as"
     )
     return attack_vector
 
