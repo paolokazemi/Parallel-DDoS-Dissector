@@ -1,6 +1,7 @@
 from merge_fingerprints import read_and_merge
 
 from argparse import ArgumentParser, BooleanOptionalAction, Namespace
+from netaddr import IPNetwork
 from pathlib import Path
 from typing import Iterator
 
@@ -79,10 +80,14 @@ def split_and_run(args: Namespace, pcap: Path):
 
     logging.debug("Running DDoS Dissector")
     for pcap_file in after_split_pcaps(pcap):
+        additional_args = "--no-interactive"
+        if args.targets is not None:
+            target_list = " ".join(str(t) for t in args.targets)
+            additional_args += f" --target {target_list}"
         if args.docker:
-            exec(f"docker run --rm -i -v {pcap.resolve().parent}:/data {args.docker_image} -f /data/{pcap_file.name} --no-interactive", sudo=True)
+            exec(f"docker run --rm -i -v {pcap.resolve().parent}:/data {args.docker_image} -f /data/{pcap_file.name} {additional_args}", sudo=True)
         else:
-            exec(f"python3 src/main.py -f {pcap_file} --no-interactive")
+            exec(f"python3 src/main.py -f {pcap_file} {additional_args}")
 
         logging.debug(f"Running rm -rf {pcap_file}")
         os.remove(pcap_file)
@@ -99,6 +104,8 @@ if __name__ == '__main__':
     parser.add_argument('-ms', '--max-size', type=int, help='Max file size (MB)', default=100, dest='max_size')
     parser.add_argument('-d', '--docker-image', type=str, help='Dissector Docker image.', default='dissector:1.0', dest='docker_image')
     parser.add_argument('--docker', action=BooleanOptionalAction, help='Whether to use the docker image or not')
+    parser.add_argument('--target', type=IPNetwork, nargs='+', dest='targets',
+                        help='Optional: target IP address or subnet of this attack')
     args = parser.parse_args()
 
     if args.pcap.is_dir():
