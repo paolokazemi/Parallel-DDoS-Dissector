@@ -34,7 +34,6 @@ class Attack:
         target_addresses = [x for t in target for x in self.data.destination_address if x in t]
         normal_traffic = NormalTraffic(self.data[~self.data.destination_address.isin(target_addresses)], self.filetype)
         self.data = self.data[self.data.destination_address.isin(target_addresses)]
-        self.data['unix_timestamp'] = self.data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
         return normal_traffic
 
 
@@ -66,7 +65,6 @@ class NormalTraffic:
     def as_dict(self, attack_duration: int) -> dict:
         nr_bytes = int(self.data.nr_bytes.sum())
         nr_packets = int(self.data.nr_packets.sum())
-        self.data['unix_timestamp'] = self.data.time_end.apply(lambda x: int(pytz.utc.localize(x).timestamp()))
         grouped_by_timestamp = self.data.groupby('unix_timestamp').sum()
         return {
             'attack_duration': attack_duration,

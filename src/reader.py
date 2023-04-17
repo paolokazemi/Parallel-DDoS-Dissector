@@ -5,6 +5,7 @@ import multiprocessing
 import numpy as np
 import pandas as pd
 import datetime
+import pytz
 
 from pathlib import Path
 from io import StringIO
@@ -94,6 +95,9 @@ def read_flow(filename: Path) -> pd.DataFrame:
     data['nr_packets'] = data['nr_packets'].astype(int)
     data['nr_bytes'] = data['nr_bytes'].astype(int)
 
+    # Unix timestamp for the peak analysis
+    data['unix_timestamp'] = data['time_end'].apply(lambda x: int(pytz.utc.localize(x).timestamp()))
+
     LOGGER.debug('Done loading data into dataframe.')
     return data
 
@@ -170,6 +174,9 @@ def read_pcap(filename: Path) -> pd.DataFrame:
     # Compatibility with FLOW-based methods requires some unavailable fields
     data['nr_packets'] = 1  # in PCAPs each row is one packet - this allows us to use the FLOW code
     data['time_end'] = data['time_start']  # One packet does not have a duration
+
+    # Unix timestamp for the peak analysis
+    data['unix_timestamp'] = data['time_end'].apply(lambda x: int(pytz.utc.localize(x).timestamp()))
 
     # Fill NaN values with reasonable values such that the columns can be cast to an appropriate type
     data['dns_query_name'] = data['dns_query_name'].fillna('').astype(str)
