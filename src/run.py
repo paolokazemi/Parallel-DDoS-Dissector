@@ -11,7 +11,7 @@ import os
 import subprocess
 
 
-def exec(cmd: str, sudo=False) -> str:
+def exec(cmd: str, sudo=False, check=True) -> str:
     """
     Execute a given bash command, returning its standard output.
     :param cmd: String containg the command to execute.
@@ -20,7 +20,8 @@ def exec(cmd: str, sudo=False) -> str:
     """
     cmd = f"sudo {cmd}" if sudo else cmd
     logging.debug(f"Running `{cmd}`")
-    return subprocess.check_output(cmd, shell=True)
+    result = subprocess.run(cmd, shell=True, check=check, stdout=subprocess.PIPE)
+    return result.stdout
 
 
 def clean_up_fingerprints(pcap: Path, is_docker: bool):
@@ -63,7 +64,7 @@ def split_and_run(args: Namespace, pcap: Path):
     :param args: Arguments provided to the program.
     :param pcap: Path to the PCAP file.
     """
-    capinfos = exec(f"capinfos {pcap}")
+    capinfos = exec(f"capinfos {pcap}", check=False)
     total_packets = int([row for row in capinfos.decode('utf-8').split("\n") if 'Number of packets = ' in row].pop().split('=')[1].strip())
     pcap_size = os.path.getsize(pcap)
 
