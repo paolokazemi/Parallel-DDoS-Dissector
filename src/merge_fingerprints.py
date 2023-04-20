@@ -170,11 +170,11 @@ def merge_normal_traffic(x: Dict[str, Any], y: Dict[str, Any]) -> Dict[str, Any]
     Merge normal traffic statistics using the same procedure applied to fingerprints.
     """
     merged_traffic = {
-        "total_packets": x["total_packets"] + y["total_packets"],
+        "nr_packets": x["nr_packets"] + y["nr_packets"],
         "total_megabytes": x["total_megabytes"] + y["total_megabytes"],
         "avg_bps": int(weighted_avg(x["avg_bps"], x["attack_duration"], y["avg_bps"], y["attack_duration"])),
         "avg_pps": int(weighted_avg(x["avg_pps"], x["attack_duration"], y["avg_pps"], y["attack_duration"])),
-        "avg_Bpp": int(weighted_avg(x["avg_Bpp"], x["total_packets"], y["avg_Bpp"], y["total_packets"])),
+        "avg_Bpp": int(weighted_avg(x["avg_Bpp"], x["nr_packets"], y["avg_Bpp"], y["nr_packets"])),
         "peak_bps": max(x["peak_bps"], y["peak_bps"]),
         "peak_pps": max(x["peak_pps"], y["peak_pps"]),
         "peak_Bpp": max(x["peak_Bpp"], y["peak_Bpp"]),

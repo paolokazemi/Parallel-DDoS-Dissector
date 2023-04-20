@@ -70,7 +70,7 @@ class NormalTraffic:
             'attack_duration': attack_duration,
             f'total_{"flows" if self.filetype == FileType.FLOW else "packets"}': len(self.data),
             'total_megabytes': nr_bytes // 1_000_000,
-            'total_packets': nr_packets,
+            'nr_packets': nr_packets,
             'avg_bps': (nr_bytes << 3) // attack_duration if attack_duration > 0 else 0,  # octets to bits
             'avg_pps': nr_packets // attack_duration if attack_duration > 0 else 0,
             'avg_Bpp': nr_bytes // nr_packets if nr_packets > 0 else 0,
