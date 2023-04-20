@@ -145,22 +145,6 @@ class AttackVector:
             self.service = None
         if self.protocol == 'TCP':
             self.tcp_flags = dict(get_outliers(self.data, 'tcp_flags', 0.2, return_others=True)) or None
-            if self.filetype == FileType.PCAP:  # Transform the numeric TCP flag representation to identifiable letters
-                flag_letters = {}
-                for key, value in self.tcp_flags.items():
-                    if key == 'others':
-                        flag_letters[key] = value
-                        continue
-                    new_key = '..'
-                    int_flags = int(key, 16)
-                    for bit in range(5, -1, -1):  # bit locations: ..543210
-                        if int_flags - 2 ** bit >= 0:
-                            new_key += TCP_BIT_NUMBERS[bit + 1]
-                            int_flags -= 2 ** bit
-                        else:
-                            new_key += '.'
-                    flag_letters[new_key] = value
-                self.tcp_flags = flag_letters
 
         else:
             self.tcp_flags = None

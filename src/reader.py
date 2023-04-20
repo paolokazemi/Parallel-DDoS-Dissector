@@ -33,7 +33,7 @@ FLOW_COLUMN_NAMES: dict[str, str] = {
 PCAP_COLUMN_NAMES: dict[str, str] = {
     'ip.dst': 'destination_address',
     'ip.src': 'source_address',
-    'tcp.flags': 'tcp_flags',
+    'tcp.flags.str': 'tcp_flags',
     'ip.proto': 'protocol',
     '_ws.col.Destination': 'col_destination_address',
     '_ws.col.Source': 'col_source_address',
@@ -170,6 +170,7 @@ def read_pcap(filename: Path) -> pd.DataFrame:
         .fillna(0).astype(np.ushort)
     data.drop(['tcp_source_port', 'udp_source_port', 'tcp_destination_port', 'udp_destination_port'],
               axis=1, inplace=True)
+    data['tcp_flags'] = data['tcp_flags'].astype(str).apply(lambda x: x.replace("\u00b7", "."))
 
     # Compatibility with FLOW-based methods requires some unavailable fields
     data['nr_packets'] = 1  # in PCAPs each row is one packet - this allows us to use the FLOW code
