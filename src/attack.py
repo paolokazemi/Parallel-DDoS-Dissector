@@ -152,7 +152,7 @@ class AttackVector:
                         flag_letters[key] = value
                         continue
                     new_key = '..'
-                    int_flags = int(str(key)[2:])
+                    int_flags = int(key, 16)
                     for bit in range(5, -1, -1):  # bit locations: ..543210
                         if int_flags - 2 ** bit >= 0:
                             new_key += TCP_BIT_NUMBERS[bit + 1]
