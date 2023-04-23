@@ -20,3 +20,5 @@ intermediate_fingeprints/
 *.conf
 *.ini
 *.pcap
+*.erf
+*.nfdump

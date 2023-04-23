@@ -58,6 +58,15 @@ PCAP_COLUMN_NAMES: dict[str, str] = {
 }
 
 
+def parse_timestamp(ts: str) -> datetime.datetime:
+    ts = ts.replace('CEST', 'CET')
+
+    return pd \
+        .to_datetime(ts, format="%b %d, %Y %H:%M:%S.%f %Z") \
+        .to_pydatetime() \
+        .replace(tzinfo=None)
+
+
 def read_flow(filename: Path) -> pd.DataFrame:
     """
     Load the FLOW capture into a dataframe
@@ -130,7 +139,7 @@ def read_pcap(filename: Path) -> pd.DataFrame:
     try:
         data: pd.DataFrame = pd.read_csv(
             output_buffer, parse_dates=['frame.time'], low_memory=False, delimiter=',',
-            date_parser=lambda x: datetime.datetime.strptime(x, "%b %d, %Y %H:%M:%S.%f000 %Z"))
+            date_parser=parse_timestamp)
     except pd.errors.ParserError as e:
         LOGGER.info(f'Error reading PCAP file: {e}')
         LOGGER.info(f'Skipping the offending lines...')
@@ -203,6 +212,8 @@ def read_file(filename: Path, filetype: FileType, nr_processes: int) -> pd.DataF
 
     if filetype == FileType.FLOW:
         return read_flow(filename)
+    elif filetype == FileType.ERF:
+        return read_pcap(filename)
     elif filetype == FileType.PCAP:
         if filename.stat().st_size < (5 ** 6):  # PCAP is smaller than 5MB
             return read_pcap(filename)

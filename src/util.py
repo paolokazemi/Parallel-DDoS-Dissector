@@ -194,6 +194,7 @@ class FileType(Enum):
     """
     FLOW = 'Flow'
     PCAP = 'PCAP'
+    ERF  = 'ERF'
 
     def __str__(self):
         return self.value
@@ -215,6 +216,8 @@ def determine_filetype(filenames: list[Path]) -> FileType:
             filetype = FileType.PCAP
         elif filename.suffix.lower() == '.nfdump' and filetype in [FileType.FLOW, None]:
             filetype = FileType.FLOW
+        elif filename.suffix.lower() == '.erf' and filetype in [FileType.ERF, None]:
+            filetype = FileType.ERF
         else:
             if filetype is None:
                 error(f"File extesion '{filename.suffix}' not recognized. "
