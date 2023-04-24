@@ -192,9 +192,10 @@ class FileType(Enum):
     """
     PCAP or FLOW traffic capture file options
     """
-    FLOW = 'Flow'
-    PCAP = 'PCAP'
-    ERF  = 'ERF'
+    FLOW  = 'Flow'
+    PCAP  = 'PCAP'
+    ERF   = 'ERF'
+    ARGUS = 'Argus'
 
     def __str__(self):
         return self.value
@@ -218,6 +219,8 @@ def determine_filetype(filenames: list[Path]) -> FileType:
             filetype = FileType.FLOW
         elif filename.suffix.lower() == '.erf' and filetype in [FileType.ERF, None]:
             filetype = FileType.ERF
+        elif filename.suffix.lower() == '.argus' and filetype in [FileType.ARGUS, None]:
+            filetype = FileType.ARGUS
         else:
             if filetype is None:
                 error(f"File extesion '{filename.suffix}' not recognized. "

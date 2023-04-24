@@ -58,6 +58,19 @@ PCAP_COLUMN_NAMES: dict[str, str] = {
 }
 
 
+ARGUS_COLUMN_NAMES: dict[str, str] = {
+    'StartTime': 'time_start',
+    'LastTime': 'time_end',
+    'Proto': 'protocol',
+    'SrcAddr': 'source_address',
+    'DstAddr': 'destination_address',
+    'Sport': 'source_port',
+    'Dport': 'destination_port',
+    'SrcPkts': 'nr_packets',
+    'SrcBytes': 'nr_bytes',
+}
+
+
 def parse_timestamp(ts: str) -> datetime.datetime:
     ts = ts.replace('CEST', 'CET')
 
@@ -200,6 +213,53 @@ def read_pcap(filename: Path) -> pd.DataFrame:
     return data
 
 
+def read_argus(filename: Path) -> pd.DataFrame:
+    """
+    Load the Argus capture into a dataframe
+    :param filename: location of the Argus file
+    :return: DataFrame of the contents
+    """
+    # Check if ra software is available
+    ra = shutil.which('ra')
+    if ra is None:
+        error('ra software not found; it should be on the $PATH. Install from https://github.com/openargus/clients')
+
+    command = [ra, '-c', ',', '-X', '-n', '-u', '-p', '0', '-L', '0',
+               '-s', 'stime', 'ltime', 'proto', 'saddr', 'daddr', 'sport', 'dport', 'spkts', 'sbytes',
+               '-r', str(filename)]
+    process = subprocess.run(command, capture_output=True)
+    if process.returncode != 0:
+        LOGGER.error('ra command failed!\n')
+        error(f'ra command stderr:\n{process.stderr.decode("utf-8")}')
+    LOGGER.debug('ra finished reading Argus dump.')
+
+    # Process ra output
+    output_buffer = StringIO(process.stdout.decode('utf-8'))
+    LOGGER.info('Loading data into a dataframe.')
+    data: pd.DataFrame = pd.read_csv(output_buffer, encoding='utf8', parse_dates=['StartTime', 'LastTime'],
+                                     date_parser=lambda x: datetime.datetime.fromtimestamp(int(x)))
+
+    # Keep only relevant columns & rename
+    data = data[data.columns.intersection(ARGUS_COLUMN_NAMES.keys())].rename(columns=ARGUS_COLUMN_NAMES)
+
+    LOGGER.debug('Ensuring all columns have the correct data types.')
+
+    data['source_address'] = data['source_address'].apply(IPAddress)
+    data['destination_address'] = data['destination_address'].apply(IPAddress)
+    data['source_port'] = data['source_port'].astype(np.ushort)
+    data['destination_port'] = data['destination_port'].astype(np.ushort)
+    data['protocol'] = data['protocol'].astype(str)
+    data['tcp_flags'] = ""
+    data['nr_packets'] = data['nr_packets'].astype(int)
+    data['nr_bytes'] = data['nr_bytes'].astype(int)
+
+    # Unix timestamp for the peak analysis
+    data['unix_timestamp'] = data['time_end'].apply(lambda x: int(pytz.utc.localize(x).timestamp()))
+
+    LOGGER.debug('Done loading data into dataframe.')
+    return data
+
+
 def read_file(filename: Path, filetype: FileType, nr_processes: int) -> pd.DataFrame:
     """
     Read capture file into Dataframe using either read_flow or read_pcap
@@ -214,6 +274,8 @@ def read_file(filename: Path, filetype: FileType, nr_processes: int) -> pd.DataF
         return read_flow(filename)
     elif filetype == FileType.ERF:
         return read_pcap(filename)
+    elif filetype == FileType.ARGUS:
+        return read_argus(filename)
     elif filetype == FileType.PCAP:
         if filename.stat().st_size < (5 ** 6):  # PCAP is smaller than 5MB
             return read_pcap(filename)
