@@ -30,9 +30,9 @@ def infer_target(attack: Attack, interactive: bool) -> IPNetwork:
         return IPNetwork(targets[0])
 
     LOGGER.info('No clear target IP address could be inferred.')
+    packets_per_ip = attack.data.groupby('destination_address').nr_packets.sum().sort_values(ascending=False)
     if interactive:
         # Ask the user if the most common destination address (most packets received) is the target
-        packets_per_ip = attack.data.groupby('destination_address').nr_packets.sum().sort_values(ascending=False)
         most_traffic_address, nr_packets = list(packets_per_ip.items())[0]
         use_most_common = input(f'The most common destination address is {most_traffic_address} '
                                 f'({round(nr_packets / packets_per_ip.sum() * 100, 1)}% of captured packets), '
